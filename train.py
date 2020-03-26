@@ -16,9 +16,10 @@ from utils.metrics import compute_iou_batch
 import numpy as np
 from argparse import ArgumentParser
 import cv2
+from sync_batchnorm import convert_model
 
 class Trainer(object):
-    def __init__(self, mode, optim, scheduler, model, config, model_dir):
+    def __init__(self, mode, optim, scheduler, model, config, model_dir, device, device_ids, num_classes):
         assert mode in ['training', 'inference']
         self.mode = mode
         self.model = model
@@ -26,18 +27,18 @@ class Trainer(object):
         self.model_dir = model_dir
         self.optim = optim
         self.epoch = 0
-        self.num_classes = 20
+        self.num_classes = num_classes
         self.config = config
         self.scheduler = scheduler
         self.set_log_dir()
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        self.model = self.model.to(device)
-        #device_ids = [0, 1]
-        #self.model = nn.DataParallel(self.model, device_ids)
+        self.device = device
+        self.device_ids = device_ids
+        self.model = convert_model(self.model)
+        self.model = self.model.to(self.device)
+        self.model = nn.DataParallel(self.model, self.device_ids)
         
     def train(self, train_loader, val_loader, loss_function, num_epochs):
 
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         dataloaders = {'train': train_loader, 'val': val_loader}
 
         writer = SummaryWriter(log_dir=self.log_dir)
@@ -56,25 +57,25 @@ class Trainer(object):
                 #process_bar = ShowProcess(bar_steps)
                 total = 0
 
-                nums = torch.tensor([0 for i in range(self.num_classes-1)]).cuda()
-                dens = torch.tensor([0 for i in range(self.num_classes-1)]).cuda()
+                nums = torch.tensor([0 for i in range(self.num_classes-1)]).to(self.device)
+                dens = torch.tensor([0 for i in range(self.num_classes-1)]).to(self.device)
                 
                 for i, data in enumerate(dataloaders[phase], 0):
                     inputs, labels = data
-                    inputs, labels = inputs.to(device), labels.to(device)
+                    inputs, labels = inputs.to(self.device), labels.to(self.device)
                     
                     self.optim.zero_grad()
                     #forward
                     #track history if only in train
                     
                     with torch.set_grad_enabled(phase == 'train'):
-                        outputs = self.model(inputs)
+                        outputs = self.model.forward(inputs, only_encode=self.config.only_encode) 
                         loss = loss_function(outputs, labels)
                         #preds = F.interpolate(outputs[0], size=labels.size()[2:], mode='bilinear', align_corners=True)
                         preds_np=outputs.detach()
                         labels_np = labels.detach()
 
-                        num, den = compute_iou_batch(preds_np, labels_np)
+                        num, den = compute_iou_batch(preds_np, labels_np, self.device, self.num_classes)
                         nums += num
                         dens += den
                         #backward+optimize only if in training phase
@@ -105,25 +106,29 @@ class Trainer(object):
             print('one epoch complete in {:.0f}m {:.0f}s'.format(
                 time_elapsed // 60, time_elapsed % 60))
 
-
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': self.model.state_dict(),
-                'optimizer_state_dict': self.optim.state_dict(),
-                'lr_scheduler': self.scheduler.state_dict(),
-                'loss': loss
-            }, self.checkpoint_path.format(epoch))
+            if self.config.only_encode:
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': self.model.module.encoder.state_dict(),
+                    'optimizer_state_dict': self.optim.state_dict(),
+                    'lr_scheduler': self.scheduler.state_dict(),
+                    'loss': loss
+                }, self.checkpoint_path.format(epoch))
+            else:
+                torch.save({
+                    'epoch': epoch,
+                    'model_state_dict': self.model.module.state_dict(),
+                    'optimizer_state_dict': self.optim.state_dict(),
+                    'lr_scheduler': self.scheduler.state_dict(),
+                    'loss': loss
+                }, self.checkpoint_path.format(epoch))
         writer.close()
         print("train finished")
 
     def set_log_dir(self, model_path=None):
         if self.mode == 'training':
             now = datetime.datetime.now()
-            #if we hanbe a model path with date and epochs use them
             if model_path:
-                # Continue form we left of .Get epoch and date form the file name
-                # A sample model path might look like:
-                #/path/to/logs/coco2017.../DeFCN_0001.h5
                 import re
                 regex = r".*/[\w-]+(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})/model\_[\w-]+(\d{4})\.pt"
                 m = re.match(regex, model_path)
@@ -131,12 +136,8 @@ class Trainer(object):
                     now = datetime.datetime(
                         int(m.group(1)), int(m.group(2)), int(m.group(3)),
                         int(m.group(4)), int(m.group(5)))
-                    # Epoch number in file is 1-based, and in Keras code it's 0-based.
-                    # So, adjust for that then increment by one to start from the next epoch
-                    #self.epoch = int(m.group(6))  + 1
                     print('Re-starting from epoch %d' % self.epoch)
 
-                    # Directory for training logs
             self.log_dir = os.path.join(
                 self.model_dir, "{}{:%Y%m%dT%H%M}".format(
                     self.config.NAME.lower(), now))
@@ -181,34 +182,30 @@ class Trainer(object):
         checkpoint = os.path.join(dir_name, checkpoints[num])
         return checkpoint
 
-    def load_weights(self, file_path, by_name=False, exclude=None):
+    def load_weights(self, file_path, encode=False, restart=False, by_name=False, exclude=None):
         checkpoint = torch.load(file_path)
-        self.model.encoder.load_state_dict(checkpoint['model_state_dict'])
+        if encode:
+            self.model.module.encoder.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            self.model.module.load_state_dict(checkpoint['model_state_dict'])
+        if restart:
+            checkpoint['epoch'] = 0
+        else:
+            self.optim.load_state_dict(checkpoint['optimizer_state_dict'])
+            self.scheduler.load_state_dict(checkpoint['lr_scheduler'])
 
-        #self.optim.load_state_dict(checkpoint['optimizer_state_dict'])
-        '''
-        for param_group in self.optim.param_groups:
-            param_group['lr'] = 1e-5
-        lambda1 = lambda epoch : (1 - epoch/300) ** 0.9
-        self.scheduler = lr_scheduler.LambdaLR(self.optim,lr_lambda=lambda1)
-        '''
-        
-        #self.scheduler.load_state_dict(checkpoint['lr_scheduler'])
-        checkpoint['epoch'] = 0
         self.epoch = checkpoint['epoch'] + 1
         #self.loss = checkpoint['loss']
         self.set_log_dir(file_path)
         print("load weights from {} finished.".format(file_path))
 
     def test(self, test_loader, save_dir="./result/"):
-        #assert self.mode == "inference", "Create model in inference mode."
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         dic = torch.tensor([7, 8, 11, 12, 13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 255]).to(device)
-        self.model.eval()
+        self.model = self.model.eval()
         with torch.no_grad():
             for data in test_loader:
                 inputs, img_ids = data
-                inputs = inputs.to(device)
+                inputs = inputs.to(self.device)
                 preds = self.model(inputs)
                 preds = preds.detach()
                 preds = F.interpolate(preds, size=(1024, 2048), mode='bilinear', align_corners=True)
@@ -220,23 +217,19 @@ class Trainer(object):
             
 
     def evaluate(self, val_loader):
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        #model = self.model.module.to(device).eval()
         self.model = self.model.eval()
-        
-
         with torch.no_grad():
             bar_steps = len(val_loader)
-            nums = torch.tensor([0 for i in range(self.num_classes-1)]).cuda()
-            dens = torch.tensor([0 for i in range(self.num_classes-1)]).cuda()
+            nums = torch.tensor([0 for i in range(self.num_classes-1)]).to(self.device)
+            dens = torch.tensor([0 for i in range(self.num_classes-1)]).to(self.device)
             for data in val_loader:
                 inputs, labels = data
-                inputs, labels = inputs.to(device), labels.to(device)
+                inputs, labels = inputs.to(self.device), labels.to(self.device)
                 outputs = self.model(inputs)
                 preds_np=outputs.detach()
                 labels_np = labels.detach()
 
-                num, den = compute_iou_batch(preds_np, labels_np)
+                num, den = compute_iou_batch(preds_np, labels_np, self.device, self.num_classes)
                 nums += num
                 dens += den
             print(nums, dens)
@@ -246,15 +239,13 @@ class Trainer(object):
             print('iou:{:.4f} '.format(iou))
             
     def fps(self, val_loader):
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        #model = self.model.module.to(device).eval()
         self.model = self.model.eval()
         
         with torch.no_grad():
             bar_steps = len(val_loader)
             res = []
             for data in val_loader:
-                inputs = data[0].to(device)
+                inputs = data[0].to(self.device)
                 torch.cuda.synchronize()
                 since = time.time()
                 outputs = self.model(inputs)

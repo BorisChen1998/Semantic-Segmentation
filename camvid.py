@@ -1,21 +1,15 @@
-from argparse import ArgumentParser
 import torch
-from torch.utils.data import  DataLoader
-from pathlib import Path
-import os
-from train import Trainer
-import torch.nn as nn
-from torch.nn import CrossEntropyLoss
-import torch.optim as optim
-from torch.optim import lr_scheduler
-from model.BLNet import Net
+import torch.utils.data
 from torchvision.transforms import Compose, CenterCrop, Normalize, Resize, Pad
 from torchvision.transforms import ToTensor, ToPILImage, transforms
 import numpy as np
 from PIL import Image, ImageOps
-dic = torch.tensor([7, 8, 11, 12, 13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 255])
-color_dic = torch.tensor([[128, 64, 128], [244, 35, 232], [70, 70, 70], [102, 102, 156], [190, 153, 153], [153, 153, 153], [250, 170, 30], [220, 220, 0], [107, 142, 35], [152, 251, 152], [70, 130, 180], [220, 20, 60], [255, 0, 0], [0, 0, 142], [0, 0, 70], [0, 60, 100], [0, 80, 100], [0, 0, 230], [119, 11, 32], [0, 0, 0]])
-class DatasetW(torch.utils.data.Dataset):
+import os
+import random
+
+num_classes = 12
+
+class DatasetCamVid(torch.utils.data.Dataset):
     def __init__(self, camvid_data_path, camvid_meta_path, only_encode, mode):
         self.img_dir = camvid_data_path + "/{}/".format(mode)
         self.label_dir = camvid_meta_path + "/{}annot/".format(mode)
@@ -61,6 +55,20 @@ class DatasetW(torch.utils.data.Dataset):
             
         img =  Resize(self.new_img_h, Image.BILINEAR)(img)
         label_img = Resize(self.new_img_h, Image.NEAREST)(label_img)
+        
+        if self.mode == "train":    
+            hflip = random.random()
+            if (hflip < 0.5):
+                img = img.transpose(Image.FLIP_LEFT_RIGHT)
+                label_img = label_img.transpose(Image.FLIP_LEFT_RIGHT)
+                
+            transX = random.randint(-2, 2) 
+            transY = random.randint(-2, 2)
+
+            img = ImageOps.expand(img, border=(transX,transY,0,0), fill=0)
+            label_img = ImageOps.expand(label_img, border=(transX,transY,0,0), fill=255) #pad label filling with 255
+            img = img.crop((0, 0, img.size[0]-transX, img.size[1]-transY))
+            label_img = label_img.crop((0, 0, label_img.size[0]-transX, label_img.size[1]-transY))   
 
         img = self.tran(img)
         if self.only_encode:
@@ -72,25 +80,3 @@ class DatasetW(torch.utils.data.Dataset):
 
     def __len__(self):
         return self.num_examples
-num_classes = 12
-torch.cuda.set_device(2)
-normVal = 1.1
-if __name__=='__main__':
-    
-    dataset = DatasetW(camvid_data_path="/home/chenxiaoshuang/CamVid",
-                                    camvid_meta_path="/home/chenxiaoshuang/CamVid",
-                                    only_encode=False, mode="train")
-    loader = DataLoader(dataset=dataset, batch_size=8, shuffle=False, num_workers=8, drop_last=False)
-    num = torch.tensor([0 for i in range(num_classes)]).cuda()
-    res = torch.tensor([0.0 for i in range(num_classes)]).cuda()
-    for data in loader:
-        inputs, labels = data
-        labels = labels.cuda()
-        for c in range(num_classes):
-            num[c] += (labels == c).sum()
-    
-    num = num * 1.0 / num.sum()
-    print(num)
-    for i in range(num_classes):
-        res[i] = 1 / torch.log(normVal + num[i])
-    print(res)

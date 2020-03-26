@@ -1,14 +1,11 @@
 import numpy as np
 import torch
 
-num_classes = 20
-
-
-def compute_iou(pred, label):
+def compute_iou(pred, label, device, num_classes):
     pred = torch.argmax(pred, axis=0)
-    #classes = torch.unique(label).cuda()
-    num = torch.tensor([0 for i in range(num_classes-1)]).cuda()
-    den = torch.tensor([0 for i in range(num_classes-1)]).cuda()
+    #classes = torch.unique(label).to(device)
+    num = torch.tensor([0 for i in range(num_classes-1)]).to(device)
+    den = torch.tensor([0 for i in range(num_classes-1)]).to(device)
     ignore = label == num_classes-1
     for c in range(num_classes-1):
         #if c == num_classes-1:
@@ -23,11 +20,11 @@ def compute_iou(pred, label):
     return (num, den)
 
 
-def compute_iou_batch(preds, labels):
-    nums = torch.tensor([0 for i in range(num_classes-1)]).cuda()
-    dens = torch.tensor([0 for i in range(num_classes-1)]).cuda()
+def compute_iou_batch(preds, labels, device, num_classes):
+    nums = torch.tensor([0 for i in range(num_classes-1)]).to(device)
+    dens = torch.tensor([0 for i in range(num_classes-1)]).to(device)
     for pred, label in zip(preds, labels):
-        num, den = compute_iou(pred, label)
+        num, den = compute_iou(pred, label, device, num_classes)
         nums += num
         dens += den
     return (nums, dens)

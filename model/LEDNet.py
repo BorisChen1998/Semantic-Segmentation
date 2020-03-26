@@ -36,7 +36,7 @@ class Conv2dBnRelu(nn.Module):
 		
         self.conv = nn.Sequential(
 		nn.Conv2d(in_ch,out_ch,kernel_size,stride,padding,dilation=dilation,bias=bias),
-		#nn.BatchNorm2d(out_ch, eps=1e-3),
+		nn.BatchNorm2d(out_ch, eps=1e-3),
 		nn.ReLU(inplace=True)
 	)
 
@@ -51,12 +51,12 @@ class DownsamplerBlock (nn.Module):
 
         self.conv = nn.Conv2d(in_channel, out_channel-in_channel, (3, 3), stride=2, padding=1, bias=True)
         self.pool = nn.MaxPool2d(2, stride=2)
-        #self.bn = nn.BatchNorm2d(out_channel, eps=1e-3)
+        self.bn = nn.BatchNorm2d(out_channel, eps=1e-3)
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, input):
         output = torch.cat([self.conv(input), self.pool(input)], 1)
-        #output = self.bn(output)
+        output = self.bn(output)
         output = self.relu(output)
         return output
 
@@ -68,57 +68,33 @@ class SS_nbt_module(nn.Module):
         oup_inc = chann//2
         
         # dw
-        self.conv3x1_1_l = nn.Sequential(
-            nn.Conv2d(oup_inc, oup_inc, (3,1), stride=1, padding=(1,0), groups=oup_inc, bias=True),
-            nn.Conv2d(oup_inc, oup_inc, 1, stride=1, bias=True)
-        )
+        self.conv3x1_1_l = nn.Conv2d(oup_inc, oup_inc, (3,1), stride=1, padding=(1,0), bias=True)
 
-        self.conv1x3_1_l = nn.Sequential(
-            nn.Conv2d(oup_inc, oup_inc, (1,3), stride=1, padding=(0,1), groups=oup_inc, bias=True),
-            nn.Conv2d(oup_inc, oup_inc, 1, stride=1, bias=True)
-        )
+        self.conv1x3_1_l = nn.Conv2d(oup_inc, oup_inc, (1,3), stride=1, padding=(0,1), bias=True)
 
-        #self.bn1_l = nn.BatchNorm2d(oup_inc, eps=1e-03)
+        self.bn1_l = nn.BatchNorm2d(oup_inc, eps=1e-03)
 
-        self.conv3x1_2_l = nn.Sequential(
-            nn.Conv2d(oup_inc, oup_inc, (3,1), stride=1, padding=(1*dilated,0), groups=oup_inc, bias=True, dilation = (dilated,1)),
-            nn.Conv2d(oup_inc, oup_inc, 1, stride=1, bias=True)
-        )
+        self.conv3x1_2_l = nn.Conv2d(oup_inc, oup_inc, (3,1), stride=1, padding=(1*dilated,0), bias=True, dilation = (dilated,1))
 
-        self.conv1x3_2_l = nn.Sequential(
-            nn.Conv2d(oup_inc, oup_inc, (1,3), stride=1, padding=(0,1*dilated), groups=oup_inc, bias=True, dilation = (1,dilated)),
-            nn.Conv2d(oup_inc, oup_inc, 1, stride=1, bias=True)
-        )
+        self.conv1x3_2_l = nn.Conv2d(oup_inc, oup_inc, (1,3), stride=1, padding=(0,1*dilated), bias=True, dilation = (1,dilated))
 
-        #self.bn2_l = nn.BatchNorm2d(oup_inc, eps=1e-03)
+        self.bn2_l = nn.BatchNorm2d(oup_inc, eps=1e-03)
         
         # dw
-        self.conv3x1_1_r = nn.Sequential(
-            nn.Conv2d(oup_inc, oup_inc, (3,1), stride=1, padding=(1,0), groups=oup_inc, bias=True),
-            nn.Conv2d(oup_inc, oup_inc, 1, stride=1, bias=True)
-        )
+        self.conv3x1_1_r = nn.Conv2d(oup_inc, oup_inc, (3,1), stride=1, padding=(1,0), bias=True)
 
-        self.conv1x3_1_r = nn.Sequential(
-            nn.Conv2d(oup_inc, oup_inc, (1,3), stride=1, padding=(0,1), groups=oup_inc, bias=True),
-            nn.Conv2d(oup_inc, oup_inc, 1, stride=1, bias=True)
-        )
+        self.conv1x3_1_r = nn.Conv2d(oup_inc, oup_inc, (1,3), stride=1, padding=(0,1), bias=True)
 
-        #self.bn1_r = nn.BatchNorm2d(oup_inc, eps=1e-03)
+        self.bn1_r = nn.BatchNorm2d(oup_inc, eps=1e-03)
 
-        self.conv3x1_2_r = nn.Sequential(
-            nn.Conv2d(oup_inc, oup_inc, (3,1), stride=1, padding=(1*dilated,0), groups=oup_inc, bias=True, dilation = (dilated,1)),
-            nn.Conv2d(oup_inc, oup_inc, 1, stride=1, bias=True)
-        )
+        self.conv3x1_2_r = nn.Conv2d(oup_inc, oup_inc, (3,1), stride=1, padding=(1*dilated,0), bias=True, dilation = (dilated,1))
 
-        self.conv1x3_2_r = nn.Sequential(
-            nn.Conv2d(oup_inc, oup_inc, (1,3), stride=1, padding=(0,1*dilated), groups=oup_inc, bias=True, dilation = (1,dilated)),
-            nn.Conv2d(oup_inc, oup_inc, 1, stride=1, bias=True)
-        )
+        self.conv1x3_2_r = nn.Conv2d(oup_inc, oup_inc, (1,3), stride=1, padding=(0,1*dilated), bias=True, dilation = (1,dilated))
 
-        #self.bn2_r = nn.BatchNorm2d(oup_inc, eps=1e-03)       
+        self.bn2_r = nn.BatchNorm2d(oup_inc, eps=1e-03)       
         
         self.relu = nn.ReLU(inplace=True)
-        #self.dropout = nn.Dropout2d(dropprob)       
+        self.dropout = nn.Dropout2d(dropprob)       
         
     @staticmethod
     def _concat(x,out):
@@ -134,29 +110,29 @@ class SS_nbt_module(nn.Module):
         output1 = self.conv3x1_1_l(x1)
         output1 = self.relu(output1)
         output1 = self.conv1x3_1_l(output1)
-        #output1 = self.bn1_l(output1)
+        output1 = self.bn1_l(output1)
         output1 = self.relu(output1)
 
         output1 = self.conv3x1_2_l(output1)
         output1 = self.relu(output1)
         output1 = self.conv1x3_2_l(output1)
-        #output1 = self.bn2_l(output1)
+        output1 = self.bn2_l(output1)
     
     
         output2 = self.conv1x3_1_r(x2)
         output2 = self.relu(output2)
         output2 = self.conv3x1_1_r(output2)
-        #output2 = self.bn1_r(output2)
+        output2 = self.bn1_r(output2)
         output2 = self.relu(output2)
 
         output2 = self.conv1x3_2_r(output2)
         output2 = self.relu(output2)
         output2 = self.conv3x1_2_r(output2)
-        #output2 = self.bn2_r(output2)
+        output2 = self.bn2_r(output2)
 
-        #if (self.dropout.p != 0):
-        #    output1 = self.dropout(output1)
-        #    output2 = self.dropout(output2)
+        if (self.dropout.p != 0):
+            output1 = self.dropout(output1)
+            output2 = self.dropout(output2)
 
         out = self._concat(output1,output2)
         out = F.relu(residual + out, inplace=True)
@@ -263,11 +239,11 @@ class APN_Module(nn.Module):
         x2 = self.down2(x1)
         x3 = self.down3(x2)
         # x3 = Interpolate(size=(h // 4, w // 4), mode="bilinear")(x3)
-        x3= interpolate(x3, size=(h // 4, w // 4), mode="bilinear", align_corners=True)	
+        x3= interpolate(x3, size=x2.size()[2:], mode="bilinear", align_corners=True)	
         x2 = self.conv2(x2)
         x = x2 + x3
         # x = Interpolate(size=(h // 2, w // 2), mode="bilinear")(x)
-        x= interpolate(x, size=(h // 2, w // 2), mode="bilinear", align_corners=True)
+        x= interpolate(x, size=x1.size()[2:], mode="bilinear", align_corners=True)
        		
         x1 = self.conv1(x1)
         x = x + x1
@@ -288,18 +264,13 @@ class Decoder (nn.Module):
     def __init__(self, num_classes):
         super().__init__()
 
-        self.apn = APN_Module(in_ch=128,out_ch=20)
-        # self.upsample = Interpolate(size=(512, 1024), mode="bilinear")
-        # self.output_conv = nn.ConvTranspose2d(16, num_classes, kernel_size=4, stride=2, padding=1, output_padding=0, bias=True)
-        # self.output_conv = nn.ConvTranspose2d(16, num_classes, kernel_size=3, stride=2, padding=1, output_padding=1, bias=True)
-        # self.output_conv = nn.ConvTranspose2d(16, num_classes, kernel_size=2, stride=2, padding=0, output_padding=0, bias=True)
+        self.apn = APN_Module(in_ch=128,out_ch=num_classes)
   
     def forward(self, input):
         
         output = self.apn(input)
-        out = interpolate(output, size=(512, 1024), mode="bilinear", align_corners=True)
-        # out = self.upsample(output)
-        # print(out.shape)
+        out = interpolate(output, size=(input.size()[2]*8, input.size()[3]*8), mode="bilinear", align_corners=True)
+        
         return out
 
 

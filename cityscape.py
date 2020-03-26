@@ -3,7 +3,6 @@ import torch.utils.data
 from torchvision.transforms import Compose, CenterCrop, Normalize, Resize, Pad
 from torchvision.transforms import ToTensor, ToPILImage, transforms
 import numpy as np
-import cv2
 from PIL import Image, ImageOps
 import os
 import random
@@ -18,10 +17,10 @@ test_dirs = ["berlin/", "bielefeld/", "bonn/", "leverkusen/", "mainz/", "munich/
 num_classes = 20
 
 class DatasetTrain(torch.utils.data.Dataset):
-    def __init__(self, cityscapes_data_path, cityscapes_meta_path):
+    def __init__(self, cityscapes_data_path, cityscapes_meta_path, only_encode):
         self.img_dir = cityscapes_data_path + "/leftImg8bit/train/"
         self.label_dir = cityscapes_meta_path + "/train/"
-
+        self.only_encode = only_encode
         self.img_h = 1024
         self.img_w = 2048
 
@@ -82,8 +81,8 @@ class DatasetTrain(torch.utils.data.Dataset):
         label_img = label_img.crop((0, 0, label_img.size[0]-transX, label_img.size[1]-transY))   
 
         img = self.tran(img)
-        #only encode
-        #label_img = Resize(int(self.new_img_h/8), Image.NEAREST)(label_img)
+        if self.only_encode:
+            label_img = Resize(int(self.new_img_h/8), Image.NEAREST)(label_img)
         
         label_img = torch.from_numpy(np.array(label_img)).long()
         label_img[label_img == 255] = 19
@@ -93,10 +92,10 @@ class DatasetTrain(torch.utils.data.Dataset):
         return self.num_examples
 
 class DatasetVal(torch.utils.data.Dataset):
-    def __init__(self, cityscapes_data_path, cityscapes_meta_path):
+    def __init__(self, cityscapes_data_path, cityscapes_meta_path, only_encode):
         self.img_dir = cityscapes_data_path + "/leftImg8bit/val/"
         self.label_dir = cityscapes_meta_path + "/val/"
-
+        self.only_encode = only_encode
         self.img_h = 1024
         self.img_w = 2048
 
@@ -115,7 +114,6 @@ class DatasetVal(torch.utils.data.Dataset):
                 img_path = val_img_dir_path + file_name
 
                 label_img_path = label_img_dir_path + img_id + "_gtFine_labelTrainIds.png"
-                #label_img = cv2.imread(label_img_path, -1) # (shape: (1024, 2048))
 
                 example = {}
                 example["img_path"] = img_path
@@ -147,8 +145,8 @@ class DatasetVal(torch.utils.data.Dataset):
         label_img = Resize(self.new_img_h, Image.NEAREST)(label_img)
 
         img = self.tran(img)
-        #only encode
-        #label_img = Resize(int(self.new_img_h/8), Image.NEAREST)(label_img)
+        if self.only_encode:
+            label_img = Resize(int(self.new_img_h/8), Image.NEAREST)(label_img)
         
         label_img = torch.from_numpy(np.array(label_img)).long()
         label_img[label_img == 255] = 19
