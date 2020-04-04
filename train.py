@@ -200,7 +200,7 @@ class Trainer(object):
         print("load weights from {} finished.".format(file_path))
 
     def test(self, test_loader, save_dir="./result/"):
-        dic = torch.tensor([7, 8, 11, 12, 13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 255]).to(device)
+        dic = torch.tensor([7, 8, 11, 12, 13, 17, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 31, 32, 33, 255]).to(self.device)
         self.model = self.model.eval()
         with torch.no_grad():
             for data in test_loader:

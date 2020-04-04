@@ -9,7 +9,7 @@ import torch.nn as nn
 from torch.nn import CrossEntropyLoss
 import torch.optim as optim
 from torch.optim import lr_scheduler
-from model.LEDNet import Net
+from model.BLNet import Net
 from config import Config
 from loss import CrossEntropyLoss2d, LovaszSoftmax
 import numpy as np
@@ -69,9 +69,9 @@ def main(args):
     exp_lr_scheduler = lr_scheduler.LambdaLR(optimizer,lr_lambda=lambda1)
     
     trainer = Trainer('training', optimizer, exp_lr_scheduler, net, cfg, './log', device, device_ids, num_classes)
-    trainer.load_weights(trainer.find_last(), encode=False, restart=False)
-    #trainer.train(train_loader, val_loader, criterion, 300)
-    trainer.evaluate(test_loader)
+    trainer.load_weights(trainer.find_last(), encode=True, restart=True)
+    trainer.train(train_loader, val_loader, criterion, 300)
+    #trainer.evaluate(val_loader)
     #trainer.test(test_loader)
     
     print('Finished Training')
