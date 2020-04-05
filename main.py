@@ -18,7 +18,7 @@ def main(args):
     if args.dataset == "cityscapes":
         train_dataset = DatasetTrain(cityscapes_data_path="/home/xiezhaozhi/data/Cityscapes",
                                     cityscapes_meta_path="/home/xiezhaozhi/data/Cityscapes/gtFine", 
-                                    only_encode=args.only_encode)
+                                    only_encode=args.only_encode, extra_data=True)
         val_dataset = DatasetVal(cityscapes_data_path="/home/xiezhaozhi/data/Cityscapes",
                                 cityscapes_meta_path="/home/xiezhaozhi/data/Cityscapes/gtFine",
                                 only_encode=args.only_encode)
@@ -69,9 +69,9 @@ def main(args):
     exp_lr_scheduler = lr_scheduler.LambdaLR(optimizer,lr_lambda=lambda1)
     
     trainer = Trainer('training', optimizer, exp_lr_scheduler, net, cfg, './log', device, device_ids, num_classes)
-    trainer.load_weights(trainer.find_last(), encode=True, restart=True)
+    #trainer.load_weights(trainer.find_last(), encode=False, restart=False)
     trainer.train(train_loader, val_loader, criterion, 300)
-    #trainer.evaluate(val_loader)
+    #trainer.evaluate(test_loader)
     #trainer.test(test_loader)
     
     print('Finished Training')

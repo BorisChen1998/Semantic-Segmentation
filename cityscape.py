@@ -6,18 +6,23 @@ import numpy as np
 from PIL import Image, ImageOps
 import os
 import random
-
+extra_data_path = "/home/chenxiaoshuang/CityscapesCoarse"
+extra_meta_path = "/home/chenxiaoshuang/CityscapesCoarse/gtCoarse"
 train_dirs = ["jena/", "zurich/", "weimar/", "ulm/", "tubingen/", "stuttgart/",
               "strasbourg/", "monchengladbach/", "krefeld/", "hanover/",
               "hamburg/", "erfurt/", "dusseldorf/", "darmstadt/", "cologne/",
               "bremen/", "bochum/", "aachen/"]
-
+train_extra_dirs = ["augsburg/", "bad-honnef/", "bamberg/", "bayreuth/", "dortmund/",
+              "dresden/", "duisburg/", "erlangen/", "freiburg/", "heidelberg/", "heilbronn/",
+              "karlsruhe/", "konigswinter/", "konstanz/", "mannheim/", "muhlheim-ruhr/",
+              "nuremberg/", "oberhausen/", "saarbrucken/", "schweinfurt/", "troisdorf/",
+              "wuppertal/", "wurzburg/"]
 val_dirs = ["frankfurt/", "munster/", "lindau/"]
 test_dirs = ["berlin/", "bielefeld/", "bonn/", "leverkusen/", "mainz/", "munich/"]
 num_classes = 20
 
 class DatasetTrain(torch.utils.data.Dataset):
-    def __init__(self, cityscapes_data_path, cityscapes_meta_path, only_encode):
+    def __init__(self, cityscapes_data_path, cityscapes_meta_path, only_encode, extra_data=False):
         self.img_dir = cityscapes_data_path + "/leftImg8bit/train/"
         self.label_dir = cityscapes_meta_path + "/train/"
         self.only_encode = only_encode
@@ -45,6 +50,26 @@ class DatasetTrain(torch.utils.data.Dataset):
                 example["label_img_path"] = label_img_path
                 example["img_id"] = img_id
                 self.examples.append(example)
+        if extra_data:
+            self.img_extra_dir = extra_data_path + "/leftImg8bit/train_extra/"
+            self.label_extra_dir = extra_meta_path + "/train_extra/"
+            for train_dir in train_extra_dirs:
+                train_img_dir_path = self.img_extra_dir + train_dir
+                label_img_dir_path = self.label_extra_dir + train_dir
+    
+                file_names = os.listdir(train_img_dir_path)
+                for file_name in file_names:
+                    img_id = file_name.split("_leftImg8bit.png")[0]
+    
+                    img_path = train_img_dir_path + file_name
+    
+                    label_img_path = label_img_dir_path + img_id + "_gtCoarse_labelTrainIds.png"
+    
+                    example = {}
+                    example["img_path"] = img_path
+                    example["label_img_path"] = label_img_path
+                    example["img_id"] = img_id
+                    self.examples.append(example)
 
         self.num_examples = len(self.examples)
         self.tran=transforms.Compose([
