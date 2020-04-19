@@ -1,11 +1,11 @@
-import torch
-import torch.utils.data
-from torchvision.transforms import Compose, CenterCrop, Normalize, Resize, Pad
-from torchvision.transforms import ToTensor, ToPILImage, transforms
 import numpy as np
 from PIL import Image, ImageOps
 import os
 import random
+import torch
+import torch.utils.data
+from torchvision.transforms import Compose, CenterCrop, Normalize, Resize, Pad
+from torchvision.transforms import ToTensor, ToPILImage, transforms
 extra_data_path = "/home/chenxiaoshuang/CityscapesCoarse"
 extra_meta_path = "/home/chenxiaoshuang/CityscapesCoarse/gtCoarse"
 train_dirs = ["jena/", "zurich/", "weimar/", "ulm/", "tubingen/", "stuttgart/",
@@ -86,7 +86,7 @@ class DatasetTrain(torch.utils.data.Dataset):
         with open(img_path, "rb") as f:
             img = Image.open(f).convert("RGB")
         with open(label_img_path, "rb") as f:
-            label_img = Image.open(f).convert("P")
+            label_img = Image.open(f).convert("L")
             
         img =  Resize(self.new_img_h, Image.BILINEAR)(img)
         label_img = Resize(self.new_img_h, Image.NEAREST)(label_img)
@@ -164,7 +164,7 @@ class DatasetVal(torch.utils.data.Dataset):
         with open(img_path, "rb") as f:
             img = Image.open(f).convert("RGB")
         with open(label_img_path, "rb") as f:
-            label_img = Image.open(f).convert("P")
+            label_img = Image.open(f).convert("L")
             
         img =  Resize(self.new_img_h, Image.BILINEAR)(img)
         label_img = Resize(self.new_img_h, Image.NEAREST)(label_img)

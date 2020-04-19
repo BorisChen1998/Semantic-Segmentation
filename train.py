@@ -28,6 +28,7 @@ class Trainer(object):
         self.optim = optim
         self.epoch = 0
         self.num_classes = num_classes
+        self.gamma = 0.2
         self.config = config
         self.scheduler = scheduler
         self.set_log_dir()
@@ -37,7 +38,7 @@ class Trainer(object):
         self.model = self.model.to(self.device)
         self.model = nn.DataParallel(self.model, self.device_ids)
         
-    def train(self, train_loader, val_loader, loss_function, num_epochs):
+    def train(self, train_loader, val_loader, loss_function1, loss_function2, num_epochs):
 
         dataloaders = {'train': train_loader, 'val': val_loader}
 
@@ -70,7 +71,7 @@ class Trainer(object):
                     
                     with torch.set_grad_enabled(phase == 'train'):
                         outputs = self.model.forward(inputs, only_encode=self.config.only_encode) 
-                        loss = loss_function(outputs, labels)
+                        loss = loss_function1(outputs, labels) + self.gamma * loss_function2(outputs, labels)
                         #preds = F.interpolate(outputs[0], size=labels.size()[2:], mode='bilinear', align_corners=True)
                         preds_np=outputs.detach()
                         labels_np = labels.detach()
@@ -78,17 +79,15 @@ class Trainer(object):
                         num, den = compute_iou_batch(preds_np, labels_np, self.device, self.num_classes)
                         nums += num
                         dens += den
-                        #backward+optimize only if in training phase
+                        
                         if phase == 'train':
                             loss.backward()
                             self.optim.step()
                 
                 
-                    # statistics
                     total += inputs.size(0)
                     running_loss += loss.item() * inputs.size(0)
-                    #process_bar.show_process()
-                #process_bar.close()
+                    
                 if phase == 'train':
                     #self.scheduler.step(loss.cpu().data.numpy())
                     if self.scheduler:
@@ -193,9 +192,9 @@ class Trainer(object):
         else:
             self.optim.load_state_dict(checkpoint['optimizer_state_dict'])
             self.scheduler.load_state_dict(checkpoint['lr_scheduler'])
+            self.loss = checkpoint['loss']
 
         self.epoch = checkpoint['epoch'] + 1
-        #self.loss = checkpoint['loss']
         self.set_log_dir(file_path)
         print("load weights from {} finished.".format(file_path))
 
